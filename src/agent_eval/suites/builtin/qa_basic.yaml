@@ -1,0 +1,90 @@
+name: qa_basic
+description: Basic Q&A evaluation suite with 20 general knowledge and reasoning cases
+version: "1.0"
+tags: [qa, general, reasoning]
+cases:
+  - id: qa_math_01
+    input: "What is 15 multiplied by 7?"
+    expected_output: "105"
+    tags: [math]
+  - id: qa_math_02
+    input: "What is the square root of 144?"
+    expected_output: "12"
+    tags: [math]
+  - id: qa_math_03
+    input: "If a train travels 60 mph for 2.5 hours, how far does it go?"
+    expected_output: "150 miles"
+    tags: [math, reasoning]
+  - id: qa_geo_01
+    input: "What is the capital of France?"
+    expected_output: "Paris"
+    tags: [geography]
+  - id: qa_geo_02
+    input: "What is the largest ocean on Earth?"
+    expected_output: "Pacific Ocean"
+    tags: [geography]
+  - id: qa_geo_03
+    input: "What continent is Brazil located on?"
+    expected_output: "South America"
+    tags: [geography]
+  - id: qa_sci_01
+    input: "What is the chemical symbol for water?"
+    expected_output: "H2O"
+    tags: [science]
+  - id: qa_sci_02
+    input: "How many planets are in our solar system?"
+    expected_output: "8"
+    tags: [science]
+  - id: qa_sci_03
+    input: "What gas do plants absorb from the atmosphere?"
+    expected_output: "Carbon dioxide"
+    tags: [science]
+  - id: qa_logic_01
+    input: "If all roses are flowers and some flowers fade quickly, can we conclude all roses fade quickly?"
+    expected_output: "No"
+    tags: [logic, reasoning]
+  - id: qa_logic_02
+    input: "What comes next in the sequence: 2, 4, 8, 16, ...?"
+    expected_output: "32"
+    tags: [logic, math]
+  - id: qa_logic_03
+    input: "If it takes 5 machines 5 minutes to make 5 widgets, how long would it take 100 machines to make 100 widgets?"
+    expected_output: "5 minutes"
+    tags: [logic, reasoning]
+  - id: qa_lang_01
+    input: "What is the past tense of 'run'?"
+    expected_output: "ran"
+    tags: [language]
+  - id: qa_lang_02
+    input: "What is a synonym for 'happy'?"
+    expected_output: "joyful"
+    metadata:
+      match_mode: contains
+    tags: [language]
+  - id: qa_hist_01
+    input: "In what year did World War II end?"
+    expected_output: "1945"
+    tags: [history]
+  - id: qa_hist_02
+    input: "Who was the first person to walk on the moon?"
+    expected_output: "Neil Armstrong"
+    tags: [history]
+  - id: qa_reason_01
+    input: "A farmer has 17 sheep. All but 9 die. How many are left?"
+    expected_output: "9"
+    tags: [reasoning]
+  - id: qa_reason_02
+    input: "You have a 3-gallon jug and a 5-gallon jug. How do you measure exactly 4 gallons?"
+    expected_output: "Fill the 5-gallon jug, pour into the 3-gallon jug until full (leaving 2 gallons), empty the 3-gallon jug, pour the 2 gallons into it, fill the 5-gallon jug again, pour into the 3-gallon jug until full (leaving 4 gallons)"
+    metadata:
+      match_mode: jaccard
+      threshold: 0.3
+    tags: [reasoning]
+  - id: qa_format_01
+    input: "List three primary colors as a comma-separated list."
+    expected_output: "red, blue, yellow"
+    tags: [format]
+  - id: qa_format_02
+    input: "Convert 100 degrees Celsius to Fahrenheit. Respond with only the number."
+    expected_output: "212"
+    tags: [format, math]
