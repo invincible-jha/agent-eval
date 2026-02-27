@@ -71,11 +71,10 @@ class SuiteBuilder:
         """
         self._cases.append(
             TestCase(
-                case_id=case_id,
-                input_text=input_text,
+                id=case_id,
+                input=input_text,
                 expected_output=expected,
                 metadata=metadata or {},
-                tags=tags or [],
             )
         )
         return self
@@ -105,7 +104,7 @@ class SuiteBuilder:
         if not self._cases:
             raise ValueError("Suite must have at least one test case.")
 
-        ids = [c.case_id for c in self._cases]
+        ids = [c.id for c in self._cases]
         duplicates = [cid for cid in ids if ids.count(cid) > 1]
         if duplicates:
             raise ValueError(f"Duplicate case IDs: {sorted(set(duplicates))}")

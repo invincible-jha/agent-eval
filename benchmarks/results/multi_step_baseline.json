@@ -1,0 +1,17 @@
+{
+  "benchmark": "multi_step_cascade",
+  "n_chains_total": 6,
+  "n_cascade_chains": 3,
+  "n_independent_chains": 3,
+  "seed": 42,
+  "cascade_detection_accuracy": 1.0,
+  "false_cascade_rate": 0.0,
+  "cascade_detected_count": 3,
+  "total_cascade_scenarios": 3,
+  "evaluation_latency_ms": {
+    "p50": 0.0139,
+    "p95": 0.0393,
+    "mean": 0.0161
+  },
+  "note": "Cascade detection = step 1 fails AND step 2 also fails in a cascade chain. DeepEval multi-step metric: measures bottleneck step detection. Ragas: answer correctness for QA chains (no cascade model). Sources: docs.deepeval.com (2024), arXiv:2309.15217 (2023)."
+}

@@ -1,0 +1,32 @@
+{
+  "benchmark": "metric_correlation",
+  "seed": 42,
+  "n_cases": 10,
+  "n_triplets": 30,
+  "correlation_by_mode": {
+    "exact": {
+      "spearman_rho": 0.5406,
+      "n_pairs": 30,
+      "mean_automated_score": 0.0333,
+      "mean_human_score": 0.55
+    },
+    "fuzzy": {
+      "spearman_rho": 0.3704,
+      "n_pairs": 30,
+      "mean_automated_score": 0.1207,
+      "mean_human_score": 0.55
+    },
+    "contains": {
+      "spearman_rho": 0.7942,
+      "n_pairs": 30,
+      "mean_automated_score": 0.3,
+      "mean_human_score": 0.55
+    }
+  },
+  "evaluation_latency_ms": {
+    "p50": 0.0018,
+    "p95": 0.0127,
+    "mean": 0.0082
+  },
+  "note": "DeepEval: 0.7-0.9 Spearman vs human (LLM-judge-based). Ragas: 0.65-0.85 for faithfulness/relevance. Sources: docs.deepeval.com (2024), arXiv:2309.15217 (2023). This measures BasicAccuracyEvaluator (Jaccard/exact) vs synthetic human scores. LLM-judge-based metrics expected to correlate significantly higher."
+}

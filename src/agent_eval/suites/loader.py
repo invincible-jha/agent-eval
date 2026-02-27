@@ -69,11 +69,10 @@ class SuiteLoader:
 
             cases.append(
                 TestCase(
-                    case_id=case_id,
-                    input_text=input_text,
+                    id=case_id,
+                    input=input_text,
                     expected_output=expected_str,
                     metadata=metadata,
-                    tags=tags,
                 )
             )
         return cases

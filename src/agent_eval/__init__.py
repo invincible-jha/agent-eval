@@ -16,6 +16,8 @@ from __future__ import annotations
 
 __version__: str = "0.1.0"
 
+from agent_eval.convenience import evaluate
+
 # Core abstractions
 from agent_eval.core.evaluator import (
     Dimension,
@@ -41,8 +43,16 @@ from agent_eval.gates.composite import CompositeGate
 from agent_eval.suites.loader import SuiteLoader
 from agent_eval.suites.builder import SuiteBuilder
 
+# Conversational metrics
+from agent_eval.conversational import (
+    ConversationEvaluator,
+    ConversationReport,
+    Turn,
+)
+
 __all__ = [
     "__version__",
+    "evaluate",
     # Core
     "Dimension",
     "DimensionScore",
@@ -65,4 +75,8 @@ __all__ = [
     # Suites
     "SuiteLoader",
     "SuiteBuilder",
+    # Conversational metrics
+    "ConversationEvaluator",
+    "ConversationReport",
+    "Turn",
 ]
