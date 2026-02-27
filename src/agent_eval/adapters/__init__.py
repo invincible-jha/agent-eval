@@ -1,8 +1,8 @@
 """Agent framework adapters for agent-eval.
 
 Adapters wrap various agent frameworks (LangChain, CrewAI, AutoGen,
-OpenAI Agents SDK) and generic interfaces (callable, HTTP) as
-AgentUnderTest instances for evaluation.
+OpenAI Agents SDK, Anthropic SDK, Microsoft Agents SDK) and generic
+interfaces (callable, HTTP) as AgentUnderTest instances for evaluation.
 """
 from __future__ import annotations
 

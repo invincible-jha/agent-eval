@@ -52,9 +52,8 @@ import agent_eval
 
 ## Enterprise Upgrade
 
-The open-source edition provides the core foundation. For production
-deployments requiring SLA-backed support, advanced integrations, and the full
-AgentEval platform, see [docs/UPGRADE_TO_AgentEval.md](docs/UPGRADE_TO_AgentEval.md).
+For production deployments requiring SLA-backed support and advanced
+integrations, contact the maintainers or see the commercial extensions documentation.
 
 ## Contributing
 

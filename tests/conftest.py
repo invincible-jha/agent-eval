@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import pytest
 
+from agent_eval.pytest_plugin.fixtures import eval_context  # noqa: F401
+
 
 @pytest.fixture()
 def package_name() -> str:

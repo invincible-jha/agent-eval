@@ -504,5 +504,203 @@ def adapters_command() -> None:
     console.print(table)
 
 
+# ---------------------------------------------------------------
+# leaderboard — submit, list, and export evaluation results
+# ---------------------------------------------------------------
+
+
+@cli.group(name="leaderboard")
+def leaderboard_group() -> None:
+    """Manage the agent evaluation leaderboard."""
+
+
+@leaderboard_group.command(name="submit")
+@click.option("--agent-name", required=True, help="Name of the agent.")
+@click.option("--agent-version", required=True, help="Version of the agent.")
+@click.option("--framework", required=True, help="Agent framework (e.g. langchain).")
+@click.option("--model", required=True, help="Underlying language model.")
+@click.option("--submitter", required=True, help="Name of the submitting team or person.")
+@click.option("--accuracy", type=float, required=True, help="Accuracy score [0.0-1.0].")
+@click.option("--safety", type=float, required=True, help="Safety score [0.0-1.0].")
+@click.option(
+    "--cost-efficiency", type=float, required=True, help="Cost-efficiency score [0.0-1.0]."
+)
+@click.option("--latency-p95", type=float, required=True, help="P95 latency in milliseconds.")
+@click.option("--consistency", type=float, required=True, help="Consistency score [0.0-1.0].")
+@click.option("--security", type=float, required=True, help="Security score [0.0-1.0].")
+@click.option("--benchmark-name", required=True, help="Benchmark suite name.")
+@click.option("--benchmark-version", default="1.0", help="Benchmark suite version.")
+@click.option("--num-runs", type=int, default=1, help="Number of evaluation runs.")
+@click.option("--total-tokens", type=int, default=0, help="Total tokens consumed.")
+@click.option("--total-cost-usd", type=float, default=0.0, help="Total cost in USD.")
+@click.option(
+    "--storage",
+    type=click.Path(path_type=Path),
+    default=Path("leaderboard.json"),
+    help="Path to the leaderboard JSON file.",
+)
+def leaderboard_submit(
+    agent_name: str,
+    agent_version: str,
+    framework: str,
+    model: str,
+    submitter: str,
+    accuracy: float,
+    safety: float,
+    cost_efficiency: float,
+    latency_p95: float,
+    consistency: float,
+    security: float,
+    benchmark_name: str,
+    benchmark_version: str,
+    num_runs: int,
+    total_tokens: int,
+    total_cost_usd: float,
+    storage: Path,
+) -> None:
+    """Submit an evaluation result to the leaderboard."""
+    from agent_eval.leaderboard.submission import LeaderboardSubmission
+    from agent_eval.leaderboard.storage import LeaderboardStorage
+
+    try:
+        submission = LeaderboardSubmission(
+            agent_name=agent_name,
+            agent_version=agent_version,
+            framework=framework,
+            model=model,
+            submitter=submitter,
+            accuracy_score=accuracy,
+            safety_score=safety,
+            cost_efficiency=cost_efficiency,
+            latency_p95_ms=latency_p95,
+            consistency_score=consistency,
+            security_score=security,
+            benchmark_name=benchmark_name,
+            benchmark_version=benchmark_version,
+            num_runs=num_runs,
+            total_tokens=total_tokens,
+            total_cost_usd=total_cost_usd,
+        )
+    except Exception as exc:
+        console.print(f"[red]Validation error:[/red] {exc}")
+        sys.exit(1)
+
+    store = LeaderboardStorage(storage_path=storage)
+    store.save(submission)
+
+    console.print(f"[green]Submitted:[/green] {agent_name} v{agent_version}")
+    console.print(f"  Composite score: [bold]{submission.composite_score:.4f}[/bold]")
+    console.print(f"  Stored in: {storage}")
+
+
+@leaderboard_group.command(name="list")
+@click.option(
+    "--storage",
+    type=click.Path(exists=True, path_type=Path),
+    default=Path("leaderboard.json"),
+    help="Path to the leaderboard JSON file.",
+)
+@click.option(
+    "--sort-by",
+    default="composite_score",
+    help="Field to sort by (default: composite_score).",
+)
+@click.option("--ascending", is_flag=True, help="Sort in ascending order.")
+@click.option("--top", type=int, default=None, help="Show only top N results.")
+@click.option("--framework", default=None, help="Filter by framework name.")
+@click.option("--benchmark", default=None, help="Filter by benchmark name.")
+def leaderboard_list(
+    storage: Path,
+    sort_by: str,
+    ascending: bool,
+    top: int | None,
+    framework: str | None,
+    benchmark: str | None,
+) -> None:
+    """Display the leaderboard rankings."""
+    from agent_eval.leaderboard.ranking import RankingEngine
+    from agent_eval.leaderboard.storage import LeaderboardStorage
+
+    store = LeaderboardStorage(storage_path=storage)
+    submissions = store.load_all()
+
+    if not submissions:
+        console.print("[yellow]No submissions found in leaderboard.[/yellow]")
+        return
+
+    if framework is not None:
+        submissions = RankingEngine.filter_by_framework(submissions, framework)
+    if benchmark is not None:
+        submissions = RankingEngine.filter_by_benchmark(submissions, benchmark)
+
+    try:
+        if top is not None:
+            submissions = RankingEngine.top_n(submissions, n=top, sort_by=sort_by)
+        else:
+            submissions = RankingEngine.rank(submissions, sort_by=sort_by, ascending=ascending)
+    except ValueError as exc:
+        console.print(f"[red]Ranking error:[/red] {exc}")
+        sys.exit(1)
+
+    table = Table(title="Agent Leaderboard")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Agent", style="cyan")
+    table.add_column("Version", style="green")
+    table.add_column("Framework", style="yellow")
+    table.add_column("Model", style="magenta")
+    table.add_column("Composite", style="bold")
+    table.add_column("Accuracy")
+    table.add_column("Safety")
+    table.add_column("Benchmark")
+
+    for rank_position, sub in enumerate(submissions, start=1):
+        table.add_row(
+            str(rank_position),
+            sub.agent_name,
+            sub.agent_version,
+            sub.framework,
+            sub.model,
+            f"{sub.composite_score:.4f}",
+            f"{sub.accuracy_score:.4f}",
+            f"{sub.safety_score:.4f}",
+            sub.benchmark_name,
+        )
+
+    console.print(table)
+
+
+@leaderboard_group.command(name="export")
+@click.argument("output_file", type=click.Path(path_type=Path))
+@click.option(
+    "--storage",
+    type=click.Path(exists=True, path_type=Path),
+    default=Path("leaderboard.json"),
+    help="Source leaderboard JSON file.",
+)
+@click.option("--format", "output_format", type=click.Choice(["json"]), default="json")
+def leaderboard_export(
+    output_file: Path,
+    storage: Path,
+    output_format: str,
+) -> None:
+    """Export the leaderboard to a file.
+
+    OUTPUT_FILE is the destination path for the exported data.
+    """
+    from agent_eval.leaderboard.storage import LeaderboardStorage
+
+    store = LeaderboardStorage(storage_path=storage)
+    submissions = store.load_all()
+
+    if not submissions:
+        console.print("[yellow]Leaderboard is empty — nothing to export.[/yellow]")
+        return
+
+    store.export_json(output_file)
+    console.print(
+        f"[green]Exported {len(submissions)} submission(s) to {output_file}[/green]"
+    )
+
+
 if __name__ == "__main__":
     cli()
