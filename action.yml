@@ -1,0 +1,84 @@
+name: 'AumOS Agent Evaluation'
+description: 'Run agent evaluations and benchmarks in your CI pipeline with multi-run statistical analysis'
+branding:
+  icon: 'bar-chart-2'
+  color: 'green'
+
+inputs:
+  benchmark-path:
+    description: 'Path to benchmark YAML file'
+    required: true
+  eval-runs:
+    description: 'Number of evaluation runs for statistical significance'
+    required: false
+    default: '5'
+  python-version:
+    description: 'Python version'
+    required: false
+    default: '3.12'
+  fail-threshold:
+    description: 'Minimum score threshold to pass (0.0-1.0)'
+    required: false
+    default: '0.7'
+  output-format:
+    description: 'Report format: json, markdown, html'
+    required: false
+    default: 'markdown'
+  dimensions:
+    description: 'Comma-separated evaluation dimensions: accuracy,safety,consistency,cost'
+    required: false
+    default: 'accuracy,safety,consistency,cost'
+
+outputs:
+  overall-score:
+    description: 'Overall evaluation score'
+    value: ${{ steps.eval.outputs.score }}
+  report-path:
+    description: 'Path to evaluation report'
+    value: ${{ steps.eval.outputs.report }}
+  passed:
+    description: 'Whether the evaluation passed the threshold'
+    value: ${{ steps.eval.outputs.passed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install agent-eval
+      shell: bash
+      run: pip install aumos-agent-eval
+
+    - name: Run evaluation
+      id: eval
+      shell: bash
+      run: |
+        EXIT_CODE=0
+        agent-eval run \
+          --benchmark "${{ inputs.benchmark-path }}" \
+          --runs ${{ inputs.eval-runs }} \
+          --format ${{ inputs.output-format }} \
+          --output eval-report.${{ inputs.output-format }} \
+          --threshold ${{ inputs.fail-threshold }} \
+          --dimensions ${{ inputs.dimensions }} || EXIT_CODE=$?
+
+        echo "report=eval-report.${{ inputs.output-format }}" >> $GITHUB_OUTPUT
+        echo "passed=$( [ $EXIT_CODE -eq 0 ] && echo 'true' || echo 'false' )" >> $GITHUB_OUTPUT
+
+        if [ -f eval-report.json ]; then
+          SCORE=$(python -c "import json; r=json.load(open('eval-report.json')); print(r.get('overall_score', 0))")
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+        fi
+
+        exit $EXIT_CODE
+
+    - name: Upload evaluation report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: agent-eval-report
+        path: eval-report.*
+        if-no-files-found: ignore
