@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-eval"
+name = "aumos-agent-eval"
 version = "0.1.0"
 description = "Framework for evaluating AI agents across multiple quality dimensions"
 readme = "README.md"
