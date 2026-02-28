@@ -238,5 +238,3 @@ export function createAgentEvalClient(
   };
 }
 
-/** Re-export config type for convenience. */
-export type { EvaluationConfig, EvaluationResult, BenchmarkRun, BenchmarkDescriptor, RunComparison };
