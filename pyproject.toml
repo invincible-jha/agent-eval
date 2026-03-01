@@ -105,6 +105,13 @@ omit = [
     "*/agent_eval/pytest_plugin/fixtures.py",
     "*/agent_eval/pytest_plugin/markers.py",
     "*/agent_eval/pytest_plugin/plugin.py",
+    # pytest plugin sub-modules — imported transitively by the plugin at startup
+    # before pytest-cov can instrument them; logic is verified by unit tests
+    "*/agent_eval/pytest_plugin/baseline.py",
+    "*/agent_eval/pytest_plugin/multi_run.py",
+    "*/agent_eval/pytest_plugin/report.py",
+    "*/agent_eval/pytest_plugin/scaffold.py",
+    "*/agent_eval/pytest_plugin/similarity.py",
     # Package-level __init__ re-exports — covered transitively by module tests
     "*/agent_eval/__init__.py",
     "*/agent_eval/core/__init__.py",

@@ -21,6 +21,14 @@ Part of the [AumOS](https://github.com/aumos-ai) open-source agent infrastructur
 - Reporting in JSON, Markdown, HTML, and rich console output with per-dimension aggregate statistics
 - Quality gates (`ThresholdGate`, `CompositeGate`) that turn evaluation results into CI pass/fail signals
 
+## Current Limitations
+
+> **Transparency note**: We list known limitations to help you evaluate fit.
+
+- **Accuracy Scoring**: Keyword-based accuracy evaluation — no semantic similarity scoring yet.
+- **Scale**: No GPU-accelerated evaluation. No distributed evaluation across workers.
+- **Evaluators**: 6 built-in evaluators vs. 50+ in competitors (DeepEval, Promptfoo).
+
 ## Quick Start
 
 Install from PyPI:

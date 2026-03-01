@@ -14,11 +14,17 @@ Design notes
 - All ``assert_*`` methods record results rather than raising immediately,
   so a single test can accumulate multiple evaluation dimensions and inspect
   the aggregate via ``all_passed`` at the end.
+- ``assert_accuracy`` uses :class:`~agent_eval.pytest_plugin.similarity.SimilarityScorer`
+  for multi-strategy scoring instead of binary keyword matching.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+
+from agent_eval.pytest_plugin.similarity import SimilarityScorer
+
+_scorer: SimilarityScorer = SimilarityScorer()
 
 
 # ---------------------------------------------------------------------------
@@ -86,41 +92,43 @@ class EvalContext:
         result: str,
         expected_intent: str,
         threshold: float = 0.8,
+        strategy: str = "combined",
     ) -> None:
         """Assert that *result* satisfies *expected_intent* above *threshold*.
 
-        Uses simple keyword-presence scoring: 1.0 if ``expected_intent``
-        appears as a case-insensitive substring of ``result``, 0.0 otherwise.
-        The score must meet *threshold* to pass.
+        Uses multi-strategy similarity scoring via
+        :class:`~agent_eval.pytest_plugin.similarity.SimilarityScorer`:
+        a weighted ensemble of token-overlap (Jaccard), fuzzy
+        (SequenceMatcher), and character n-gram similarity, with a bonus when
+        the expected phrase is found as an exact substring of the result.
 
         Parameters
         ----------
         result:
             The agent output string to evaluate.
         expected_intent:
-            The keyword or phrase that should appear in *result*.
+            The keyword or phrase to match against *result*.
         threshold:
-            Minimum score to consider the assertion passed. Default 0.8.
-
-        Notes
-        -----
-        This is the open-source keyword-matching baseline. Semantic
-        similarity scoring is available via the plugin system.
+            Minimum similarity score to consider the assertion passed.
+            Default 0.8.
+        strategy:
+            Similarity strategy to use. One of ``"combined"`` (default),
+            ``"token_overlap"``, ``"fuzzy"``, or ``"ngram"``.
         """
         if not result or not expected_intent:
             match_score = 0.0
             reason = "Empty result or expected_intent; cannot evaluate accuracy"
         else:
-            match_score = 1.0 if expected_intent.lower() in result.lower() else 0.0
+            match_score = _scorer.score(result, expected_intent, strategy=strategy)
             if match_score >= threshold:
                 reason = (
-                    f"accuracy: intent '{expected_intent}' found in result "
-                    f"(score={match_score:.2f} >= threshold={threshold:.2f})"
+                    f"accuracy: similarity score {match_score:.4f} >= {threshold} "
+                    f"for intent '{expected_intent}'"
                 )
             else:
                 reason = (
-                    f"accuracy: intent '{expected_intent}' NOT found in result "
-                    f"(score={match_score:.2f} < threshold={threshold:.2f})"
+                    f"accuracy: similarity score {match_score:.4f} < {threshold} "
+                    f"for intent '{expected_intent}'"
                 )
 
         passed = match_score >= threshold

@@ -1,14 +1,23 @@
 /**
  * HTTP client for the agent-eval evaluation API.
  *
- * Uses the Fetch API (available natively in Node 18+, browsers, and Deno).
- * No external dependencies required.
+ * Backed by @aumos/sdk-core's createHttpClient which provides automatic retry
+ * with exponential backoff, typed error hierarchy, request lifecycle events,
+ * and abort signal support.
+ *
+ * The public API surface is unchanged — all methods still return ApiResult<T>
+ * so existing callers require no migration work.
  *
  * @example
  * ```ts
  * import { createAgentEvalClient } from "@aumos/agent-eval";
  *
  * const client = createAgentEvalClient({ baseUrl: "http://localhost:8090" });
+ *
+ * // Observe retry events from sdk-core
+ * client.events.on("request:retry", ({ payload }) => {
+ *   console.warn(`Eval API retry attempt ${payload.attempt}`);
+ * });
  *
  * const run = await client.runEvaluation({
  *   eval_name: "safety-smoke",
@@ -23,6 +32,19 @@
  * }
  * ```
  */
+
+import {
+  createHttpClient,
+  HttpError,
+  NetworkError,
+  TimeoutError,
+  RateLimitError,
+  ServerError,
+  ValidationError,
+  AumosError,
+} from "@aumos/sdk-core";
+
+import type { HttpClient, SdkEventEmitter } from "@aumos/sdk-core";
 
 import type {
   ApiError,
@@ -46,58 +68,101 @@ export interface AgentEvalClientConfig {
   readonly timeoutMs?: number;
   /** Optional extra HTTP headers sent with every request. */
   readonly headers?: Readonly<Record<string, string>>;
+  /** Optional maximum retry count. Defaults to 3. */
+  readonly maxRetries?: number;
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal adapter — bridges HttpClient throws into ApiResult<T>
 // ---------------------------------------------------------------------------
 
-async function fetchJson<T>(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
+function extractApiError(body: unknown, fallbackMessage: string): ApiError {
+  if (
+    body !== null &&
+    typeof body === "object" &&
+    "error" in body &&
+    typeof (body as Record<string, unknown>)["error"] === "string"
+  ) {
+    const candidate = body as Partial<{ error: string; detail: string }>;
+    return {
+      error: candidate.error ?? fallbackMessage,
+      detail: candidate.detail ?? "",
+    };
+  }
+  return { error: fallbackMessage, detail: "" };
+}
+
+async function executeApiCall<T>(
+  call: () => Promise<T>,
 ): Promise<ApiResult<T>> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    const body = await response.json() as unknown;
-
-    if (!response.ok) {
-      const errorBody = body as Partial<ApiError>;
+    const data = await call();
+    return { ok: true, data };
+  } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, "Rate limit exceeded"),
+        status: 429,
+      };
+    }
+    if (error instanceof ValidationError) {
       return {
         ok: false,
         error: {
-          error: errorBody.error ?? "Unknown error",
-          detail: errorBody.detail ?? "",
+          error: "Validation failed",
+          detail: Object.entries(error.fields)
+            .map(([field, messages]) => `${field}: ${messages.join(", ")}`)
+            .join("; "),
         },
-        status: response.status,
+        status: 422,
       };
     }
-
-    return { ok: true, data: body as T };
-  } catch (err: unknown) {
-    clearTimeout(timeoutId);
-    const message = err instanceof Error ? err.message : String(err);
+    if (error instanceof ServerError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, `Server error: HTTP ${error.statusCode}`),
+        status: error.statusCode,
+      };
+    }
+    if (error instanceof HttpError) {
+      return {
+        ok: false,
+        error: extractApiError(error.body, `HTTP error: ${error.statusCode}`),
+        status: error.statusCode,
+      };
+    }
+    if (error instanceof TimeoutError) {
+      return {
+        ok: false,
+        error: { error: "Request timed out", detail: error.message },
+        status: 0,
+      };
+    }
+    if (error instanceof NetworkError) {
+      return {
+        ok: false,
+        error: {
+          error: "Network error",
+          detail: error instanceof Error ? error.message : String(error),
+        },
+        status: 0,
+      };
+    }
+    if (error instanceof AumosError) {
+      return {
+        ok: false,
+        error: { error: error.code, detail: error.message },
+        status: error.statusCode ?? 0,
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
-      error: { error: "Network error", detail: message },
+      error: { error: "Unknown error", detail: message },
       status: 0,
     };
   }
-}
-
-function buildHeaders(
-  extraHeaders: Readonly<Record<string, string>> | undefined,
-): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...extraHeaders,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +171,19 @@ function buildHeaders(
 
 /** Typed HTTP client for the agent-eval server. */
 export interface AgentEvalClient {
+  /**
+   * Typed event emitter exposed from the underlying sdk-core HttpClient.
+   * Attach listeners here to observe request lifecycle, retries, and errors.
+   *
+   * @example
+   * ```ts
+   * client.events.on("request:retry", ({ payload }) => {
+   *   console.warn(`Retry attempt ${payload.attempt}, delay ${payload.delayMs}ms`);
+   * });
+   * ```
+   */
+  readonly events: SdkEventEmitter;
+
   /**
    * Start a new evaluation run against a benchmark.
    *
@@ -161,80 +239,92 @@ export interface AgentEvalClient {
 /**
  * Create a typed HTTP client for the agent-eval server.
  *
+ * Internally uses @aumos/sdk-core's createHttpClient for automatic retry,
+ * typed errors, and request lifecycle events. The public API remains identical
+ * to the previous version — all methods return ApiResult<T>.
+ *
  * @param config - Client configuration including base URL.
  * @returns An AgentEvalClient instance.
  */
 export function createAgentEvalClient(
   config: AgentEvalClientConfig,
 ): AgentEvalClient {
-  const { baseUrl, timeoutMs = 30_000, headers: extraHeaders } = config;
-  const baseHeaders = buildHeaders(extraHeaders);
+  const httpClient: HttpClient = createHttpClient({
+    baseUrl: config.baseUrl,
+    timeout: config.timeoutMs ?? 30_000,
+    maxRetries: config.maxRetries ?? 3,
+    defaultHeaders: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(config.headers as Record<string, string> | undefined),
+    },
+  });
 
   return {
-    async runEvaluation(
+    events: httpClient.events,
+
+    runEvaluation(
       evalConfig: EvaluationConfig,
     ): Promise<ApiResult<BenchmarkRun>> {
-      return fetchJson<BenchmarkRun>(
-        `${baseUrl}/evaluations`,
-        {
-          method: "POST",
-          headers: baseHeaders,
-          body: JSON.stringify(evalConfig),
-        },
-        timeoutMs,
+      return executeApiCall(() =>
+        httpClient
+          .post<BenchmarkRun>("/evaluations", evalConfig)
+          .then((r) => r.data),
       );
     },
 
-    async getBenchmarks(): Promise<ApiResult<readonly BenchmarkDescriptor[]>> {
-      return fetchJson<readonly BenchmarkDescriptor[]>(
-        `${baseUrl}/benchmarks`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getBenchmarks(): Promise<ApiResult<readonly BenchmarkDescriptor[]>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<readonly BenchmarkDescriptor[]>("/benchmarks")
+          .then((r) => r.data),
       );
     },
 
-    async getResults(options: {
+    getResults(options: {
       agentId: string;
       benchmarkId?: string;
       limit?: number;
     }): Promise<ApiResult<readonly EvaluationResult[]>> {
-      const params = new URLSearchParams();
-      params.set("agent_id", options.agentId);
+      const queryParams: Record<string, string> = {
+        agent_id: options.agentId,
+      };
       if (options.benchmarkId !== undefined) {
-        params.set("benchmark_id", options.benchmarkId);
+        queryParams["benchmark_id"] = options.benchmarkId;
       }
       if (options.limit !== undefined) {
-        params.set("limit", String(options.limit));
+        queryParams["limit"] = String(options.limit);
       }
-      return fetchJson<readonly EvaluationResult[]>(
-        `${baseUrl}/results?${params.toString()}`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+
+      return executeApiCall(() =>
+        httpClient
+          .get<readonly EvaluationResult[]>("/results", { queryParams })
+          .then((r) => r.data),
       );
     },
 
-    async compareRuns(
+    compareRuns(
       baselineRunId: string,
       candidateRunId: string,
     ): Promise<ApiResult<RunComparison>> {
-      const params = new URLSearchParams({
-        baseline: baselineRunId,
-        candidate: candidateRunId,
-      });
-      return fetchJson<RunComparison>(
-        `${baseUrl}/runs/compare?${params.toString()}`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+      return executeApiCall(() =>
+        httpClient
+          .get<RunComparison>("/runs/compare", {
+            queryParams: {
+              baseline: baselineRunId,
+              candidate: candidateRunId,
+            },
+          })
+          .then((r) => r.data),
       );
     },
 
-    async getRunStatus(runId: string): Promise<ApiResult<BenchmarkRun>> {
-      return fetchJson<BenchmarkRun>(
-        `${baseUrl}/runs/${encodeURIComponent(runId)}`,
-        { method: "GET", headers: baseHeaders },
-        timeoutMs,
+    getRunStatus(runId: string): Promise<ApiResult<BenchmarkRun>> {
+      return executeApiCall(() =>
+        httpClient
+          .get<BenchmarkRun>(`/runs/${encodeURIComponent(runId)}`)
+          .then((r) => r.data),
       );
     },
   };
 }
-

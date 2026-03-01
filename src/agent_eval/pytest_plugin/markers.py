@@ -59,8 +59,19 @@ AGENT_EVAL_MARKER: MarkerSpec = MarkerSpec(
     ),
 )
 
+AGENT_EVAL_BASELINE_MARKER: MarkerSpec = MarkerSpec(
+    name="agent_eval_baseline",
+    description=(
+        "agent_eval_baseline(name): "
+        "Mark a test as a baseline-recording test. "
+        "When present, the evaluation scores from this test run are "
+        "persisted as the reference baseline for future comparison. "
+        "name — optional label override (defaults to the test node ID)."
+    ),
+)
+
 # Ordered list of all markers registered by this plugin.
-ALL_MARKERS: tuple[MarkerSpec, ...] = (AGENT_EVAL_MARKER,)
+ALL_MARKERS: tuple[MarkerSpec, ...] = (AGENT_EVAL_MARKER, AGENT_EVAL_BASELINE_MARKER)
 
 
 @dataclass(frozen=True)
